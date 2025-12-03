@@ -1,0 +1,100 @@
+# 05_pipelined/Makefile
+# Makefile cho RISC-V pipelined: nhiều testcase + nhiều testbench
+
+# ========================
+# 0) Cấu hình chung
+# ========================
+CASE ?= case1          # mặc định chạy case1 (sim/testcases/case1.asm)
+
+ASM  := sim/testcases/$(CASE).asm
+HEX  := mem_initial_contents.hex
+
+IVERILOG      ?= iverilog
+VVP           ?= vvp
+PYTHON        ?= python3
+IVERILOG_FLAGS = -g2012
+
+# Lấy số case từ chuỗi "case1" -> "1", "case5" -> "5"
+CASE_NUM := $(patsubst case%,%,$(CASE))
+
+CASES = case1 case2 case3 case4 case5
+
+.PHONY: all sim_py run_proc run_all_cases \
+        run_case1 run_case2 run_case3 run_case4 run_case5 \
+        wave clean
+
+# ========================
+# 1) Mặc định: chạy processor với CASE hiện tại
+# ========================
+all: run_proc
+
+# ========================
+# 2) Assemble ASM -> mem_initial_contents.hex (chỉ dùng Python)
+# ========================
+sim_py:
+	@echo "============================================"
+	@echo "  Assemble $(ASM) -> $(HEX)"
+	@echo "============================================"
+	cd sim && $(PYTHON) gen_hex.py \
+		--input testcases/$(CASE).asm \
+		--output ../$(HEX) \
+		--no-sim
+
+# ========================
+# 3) Verilog: Processor pipelined
+#    (dùng tb/tb_processor_$(CASE_NUM).v tương ứng)
+# ========================
+run_proc: sim_py
+	@echo "============================================"
+	@echo "  Compile Verilog với tb_processor_$(CASE_NUM).v"
+	@echo "============================================"
+	$(IVERILOG) $(IVERILOG_FLAGS) -o sim_proc \
+		DatapathPipelined.v tb/tb_processor_$(CASE_NUM).v
+	@echo "============================================"
+	@echo "  Run sim_proc (CASE = $(CASE))"
+	@echo "============================================"
+	$(VVP) sim_proc
+
+# ========================
+# 4) Shortcut: chạy từng case trực tiếp
+#    Ví dụ: make run_case1 hoặc make run_case3
+# ========================
+run_case1:
+	$(MAKE) run_proc CASE=case1
+
+run_case2:
+	$(MAKE) run_proc CASE=case2
+
+run_case3:
+	$(MAKE) run_proc CASE=case3
+
+run_case4:
+	$(MAKE) run_proc CASE=case4
+
+run_case5:
+	$(MAKE) run_proc CASE=case5
+
+# ========================
+# 5) Chạy tất cả testcase (case1..case5)
+#    Python gen_hex + Verilog cho từng case
+# ========================
+run_all_cases:
+	@for c in $(CASES); do \
+		echo "============================================"; \
+		echo ">>> RUNNING $$c (Python gen_hex + Verilog)"; \
+		echo "============================================"; \
+		$(MAKE) run_proc CASE=$$c; \
+		echo ""; \
+	done
+
+# ========================
+# 6) Waveform (sau khi vừa chạy 1 case)
+# ========================
+wave:
+	gtkwave pipelined_processor.vcd &
+
+# ========================
+# 7) Dọn dẹp
+# ========================
+clean:
+	rm -f sim_proc pipelined_processor.vcd $(HEX)
