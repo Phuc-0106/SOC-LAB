@@ -286,6 +286,8 @@ module DatapathPipelined (
   reg [`REG_SIZE:0]  x_imm;
   reg [4:0]          x_rd;
 
+  reg [4:0]          x_rs1_idx;
+  reg [4:0]          x_rs2_idx;
   // Control signal latch
   reg x_is_load;
   reg x_is_store;
@@ -334,6 +336,8 @@ module DatapathPipelined (
       x_reg_write_en <= 1'b0;
       x_mem_to_reg   <= 1'b0;
       x_alu_src_imm  <= 1'b0;
+      x_rs1_idx      <= 5'd0;
+      x_rs2_idx      <= 5'd0;
     end else if (dx_en) begin
       if (flush_x) begin
         x_pc           <= 32'd0;
@@ -353,6 +357,8 @@ module DatapathPipelined (
         x_reg_write_en <= 1'b0;
         x_mem_to_reg   <= 1'b0;
         x_alu_src_imm  <= 1'b0;
+        x_rs1_idx      <= 5'd0;
+        x_rs2_idx      <= 5'd0;
       end else begin
         x_pc           <= d_pc;
         x_inst         <= d_inst;
@@ -372,6 +378,8 @@ module DatapathPipelined (
         x_reg_write_en <= d_reg_write_en;
         x_mem_to_reg   <= d_mem_to_reg;
         x_alu_src_imm  <= d_alu_src_imm;
+        x_rs1_idx      <= d_rs1;
+        x_rs2_idx      <= d_rs2;
       end
     end
   end
@@ -442,8 +450,33 @@ module DatapathPipelined (
 
   // Branch decision (skeleton – luôn không nhảy)
   wire x_branch_taken = 1'b0;
+    // ==================================================
+  // 4.x Forwarding logic (RAW hazard giải quyết cho Case1)
+  // ==================================================
 
-    // ---------- ALU input & CLA ----------
+  // Ưu tiên: W > M > RegFile
+  // Lưu ý: nếu M là load thì dữ liệu thật chỉ có ở W, nên không forward từ M khi m_is_load=1
+
+  wire fwd_rs1_from_m = m_reg_write_en && !m_is_load &&
+                         (m_rd != 5'd0) && (m_rd == x_rs1_idx);
+  wire fwd_rs1_from_w = w_reg_write_reg &&
+                         (w_rd_reg != 5'd0) && (w_rd_reg == x_rs1_idx);
+
+  wire fwd_rs2_from_m = m_reg_write_en && !m_is_load &&
+                         (m_rd != 5'd0) && (m_rd == x_rs2_idx);
+  wire fwd_rs2_from_w = w_reg_write_reg &&
+                         (w_rd_reg != 5'd0) && (w_rd_reg == x_rs2_idx);
+
+  wire [`REG_SIZE:0] x_rs1_fwd =
+    fwd_rs1_from_w ? w_result_reg :
+    fwd_rs1_from_m ? m_alu_res    :
+                     x_rs1_val;
+
+  wire [`REG_SIZE:0] x_rs2_fwd =
+    fwd_rs2_from_w ? w_result_reg :
+    fwd_rs2_from_m ? m_alu_res    :
+                     x_rs2_val;
+
   reg [`REG_SIZE:0] alu_b;
   reg               alu_b_invert;
   reg               alu_cin;
@@ -451,8 +484,8 @@ module DatapathPipelined (
   wire              alu_cout;
 
   always @(*) begin
-    // default
-    alu_b        = x_alu_src_imm ? x_imm : x_rs2_val;
+    // default: chọn B đã tính forwarding, rồi mới xét immediate
+    alu_b        = x_alu_src_imm ? x_imm : x_rs2_fwd;
     alu_b_invert = 1'b0;
     alu_cin      = 1'b0;
 
@@ -466,17 +499,18 @@ module DatapathPipelined (
   wire [`REG_SIZE:0] cla_b_input = alu_b_invert ? ~alu_b : alu_b;
 
   cla cla_inst (
-    .a   (x_rs1_val),
+    .a   (x_rs1_fwd),      // dùng giá trị đã forward
     .b   (cla_b_input),
     .c0  (alu_cin),
     .sum (alu_sum),
     .cout(alu_cout)
   );
 
+
   // ---------- ALU result select ----------
   reg [`REG_SIZE:0] x_alu_res_r;
 
-  always @(*) begin
+    always @(*) begin
     // default
     x_alu_res_r = 32'd0;
 
@@ -485,28 +519,28 @@ module DatapathPipelined (
       x_alu_res_r = alu_sum;
     end
     else if (x_inst_and || x_inst_andi) begin
-      x_alu_res_r = x_rs1_val & alu_b;
+      x_alu_res_r = x_rs1_fwd & alu_b;
     end
     else if (x_inst_or  || x_inst_ori) begin
-      x_alu_res_r = x_rs1_val | alu_b;
+      x_alu_res_r = x_rs1_fwd | alu_b;
     end
     else if (x_inst_xor || x_inst_xori) begin
-      x_alu_res_r = x_rs1_val ^ alu_b;
+      x_alu_res_r = x_rs1_fwd ^ alu_b;
     end
     else if (x_inst_sll || x_inst_slli) begin
-      x_alu_res_r = x_rs1_val << alu_b[4:0];
+      x_alu_res_r = x_rs1_fwd << alu_b[4:0];
     end
     else if (x_inst_srl || x_inst_srli) begin
-      x_alu_res_r = x_rs1_val >> alu_b[4:0];
+      x_alu_res_r = x_rs1_fwd >> alu_b[4:0];
     end
     else if (x_inst_sra || x_inst_srai) begin
-      x_alu_res_r = $signed(x_rs1_val) >>> alu_b[4:0];
+      x_alu_res_r = $signed(x_rs1_fwd) >>> alu_b[4:0];
     end
     else if (x_inst_slt  || x_inst_slti) begin
-      x_alu_res_r = ($signed(x_rs1_val) < $signed(alu_b)) ? 32'd1 : 32'd0;
+      x_alu_res_r = ($signed(x_rs1_fwd) < $signed(alu_b)) ? 32'd1 : 32'd0;
     end
     else if (x_inst_sltu || x_inst_sltiu) begin
-      x_alu_res_r = (x_rs1_val < alu_b) ? 32'd1 : 32'd0;
+      x_alu_res_r = (x_rs1_fwd < alu_b) ? 32'd1 : 32'd0;
     end
     else if (x_inst_lui) begin
       x_alu_res_r = x_imm;           
@@ -517,6 +551,7 @@ module DatapathPipelined (
 
     // MUL/DIV/REM TODO 
   end
+
 
   wire [`REG_SIZE:0] x_alu_res = x_alu_res_r;
 
@@ -699,14 +734,16 @@ module DatapathPipelined (
   end
 
   // ------------------------------------------------
-  // 7. HALT (skeleton)
+  // 7. HALT: dừng khi lệnh 0x00000073 đến W-stage
   // ------------------------------------------------
   always @(posedge clk) begin
     if (rst) begin
       halt <= 1'b0;
     end else begin
-      // TODO: implement ECALL/EBREAK hoặc điều kiện kết thúc test
-      halt <= 1'b0;
+      // Khi một instruction hợp lệ tới W-stage
+      if (w_valid_reg && (w_inst_reg == 32'h00000073)) begin
+        halt <= 1'b1;
+      end
     end
   end
 
