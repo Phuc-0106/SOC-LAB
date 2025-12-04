@@ -17,7 +17,7 @@ IVERILOG_FLAGS = -g2012
 # Lấy số case từ chuỗi "case1" -> "1", "case5" -> "5"
 CASE_NUM := $(patsubst case%,%,$(CASE))
 
-CASES = case1 case2 case3 case4 case5
+CASES = case1 case2 case3 case4 case5 case6 case7 case8 case9 case10 case11 case12
 
 .PHONY: all sim_py run_proc run_all_cases \
         run_case1 run_case2 run_case3 run_case4 run_case5 \
@@ -73,6 +73,26 @@ run_case4:
 
 run_case5:
 	$(MAKE) run_proc CASE=case5
+run_case6:
+	$(MAKE) run_proc CASE=case6
+
+run_case7:
+	$(MAKE) run_proc CASE=case7
+
+run_case8:
+	$(MAKE) run_proc CASE=case8
+
+run_case9:
+	$(MAKE) run_proc CASE=case9
+
+run_case10:
+	$(MAKE) run_proc CASE=case10
+
+run_case11:	
+	$(MAKE) run_proc CASE=case11
+
+run_case12:
+	$(MAKE) run_proc CASE=case12
 
 # ========================
 # 5) Chạy tất cả testcase (case1..case5)

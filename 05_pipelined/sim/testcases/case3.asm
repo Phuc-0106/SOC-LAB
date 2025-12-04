@@ -1,11 +1,19 @@
-# CASE 3: LUI + SLTI / SLTIU
+# CASE3: LUI + SLTI
 
-    lui  x1, 0x12345        # x1 = 0x12345000
-    addi x2, x1, 0x789      # x2 = 0x12345789
+    # x1 = 0x12345000
+    lui   x1, 0x12345
 
-    addi x3, x0, -1         # x3 = -1 = 0xffffffff
+    # x2 = x1 + 0x789 = 0x12345789
+    addi  x2, x1, 0x789
 
-    slti  x4, x3, 0         # signed: -1 < 0 => 1
-    sltiu x5, x3, 0         # unsigned: 0xffffffff < 0 ? => 0
+    # x3 = -1 = 0xffffffff
+    addi  x3, x0, -1
 
-    # HALT auto
+    # x4 = 1 vì 0 < 1 (signed)
+    slti  x4, x0, 1
+
+    # x5 = 0 vì 0 < -1 là false (signed)
+    slti  x5, x0, -1
+
+    # HALT
+    ecall

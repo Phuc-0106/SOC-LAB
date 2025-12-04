@@ -175,12 +175,13 @@ module DatapathPipelined (
   wire xm_en = ~stall_div;      // X -> M
   wire mw_en = 1'b1;      // M -> W
 
-  // Flush: chỉ dùng cho load-use, xoá instruction tại X (bubble)
+  // Flush:
+  //  - flush_x: bubble vì load-use HOẶC redirect (branch/jump taken)
+  //  - flush_d: flush instruction ở Decode khi có branch/jump taken
+  //  - flush_f: không cần dùng, PC đã xử lý ở F
+  wire flush_x = stall_load || x_ctrl_redirect;
+  wire flush_d = x_ctrl_redirect;
   wire flush_f = 1'b0;
-  wire flush_d = 1'b0;
-  wire flush_x = stall_load;
-
-
 
 
 
@@ -192,24 +193,28 @@ module DatapathPipelined (
   reg                f_valid;
   wire [`REG_SIZE:0] f_inst = inst_from_imem;
 
-  wire [`REG_SIZE:0] f_pc_next = f_pc_current + 4;
+  wire [`REG_SIZE:0] f_pc_plus4 = f_pc_current + 4;
 
   always @(posedge clk) begin
     if (rst) begin
       f_pc_current <= 32'd0;
       f_valid      <= 1'b0;
     end else if (pc_en) begin
-      if (flush_f) begin
-        f_pc_current <= 32'd0;
+      if (x_ctrl_redirect) begin
+        // Khi branch/JAL/JALR taken ở X → nhảy sang target
+        f_pc_current <= x_target_pc;
+        // Sau redirect, đánh dấu F-stage hiện tại như bubble
         f_valid      <= 1'b0;
       end else begin
-        f_pc_current <= f_pc_next;
+        // Bình thường: PC + 4
+        f_pc_current <= f_pc_plus4;
         f_valid      <= 1'b1;
       end
     end
   end
 
   assign pc_to_imem = f_pc_current;
+
 
   // ------------------------------------------------
   // 3. DECODE STAGE (D)
@@ -239,6 +244,19 @@ module DatapathPipelined (
         d_inst  <= f_inst;
         d_valid <= f_valid;
       end
+    end
+  end
+    // ===========================
+  // DEBUG: PC, F, D, X mỗi cycle
+  // ===========================
+  always @(posedge clk) begin
+    if (!rst) begin
+      $display("[DBG] cyc=%0d | F_pc=0x%08x F_valid=%0d | D_pc=0x%08x D_inst=0x%08x D_valid=%0d | X_pc=0x%08x X_inst=0x%08x X_valid=%0d | redirect=%0d target=0x%08x",
+               cycles_current,
+               f_pc_current, f_valid,
+               d_pc, d_inst, d_valid,
+               x_pc, x_inst, x_valid,
+               x_ctrl_redirect, x_target_pc);
     end
   end
 
@@ -517,8 +535,54 @@ module DatapathPipelined (
   reg x_div_started;
 
 
-  // Branch decision (skeleton – luôn không nhảy)
-  wire x_branch_taken = 1'b0;
+    // ===========================
+  // Branch / Jump decision in X
+  // ===========================
+  wire x_eq          = (x_rs1_fwd == x_rs2_fwd);
+  wire x_neq         = (x_rs1_fwd != x_rs2_fwd);
+  wire x_slt_signed  = ($signed(x_rs1_fwd) <  $signed(x_rs2_fwd));
+  wire x_sge_signed  = ($signed(x_rs1_fwd) >= $signed(x_rs2_fwd));
+  wire x_slt_unsigned= (x_rs1_fwd <  x_rs2_fwd);
+  wire x_sge_unsigned= (x_rs1_fwd >= x_rs2_fwd);
+
+  wire x_branch_taken =
+      (x_inst_beq  && x_eq)           ||
+      (x_inst_bne  && x_neq)          ||
+      (x_inst_blt  && x_slt_signed)   ||
+      (x_inst_bge  && x_sge_signed)   ||
+      (x_inst_bltu && x_slt_unsigned) ||
+      (x_inst_bgeu && x_sge_unsigned);
+
+  // x_imm ở đây đã là:
+  //  - B-imm đối với branch
+  //  - J-imm đối với JAL
+  //  - I-imm đối với JALR
+  // nhờ d_imm_sel ở D->X.
+  wire [`REG_SIZE:0] x_pc_plus_imm = x_pc + x_imm;
+
+  // Target JALR: (rs1 + imm) & ~1
+  wire [`REG_SIZE:0] x_jalr_target =
+      (x_rs1_fwd + x_imm) & ~32'd1;
+
+  // Có nhảy hay không?
+  wire x_ctrl_redirect =
+      x_valid && (x_inst_jal || x_inst_jalr || x_branch_taken);
+
+  // PC target:
+  //  - JAL  / branch: x_pc + x_imm
+  //  - JALR: (rs1 + imm) & ~1
+  wire [`REG_SIZE:0] x_target_pc =
+      x_inst_jalr ? x_jalr_target : x_pc_plus_imm;
+  always @(posedge clk) begin
+    if (!rst && x_valid && x_ctrl_redirect) begin
+      $display("[BR ] cyc=%0d X_pc=0x%08x inst=0x%08x jal=%0d jalr=%0d branch_taken=%0d | target=0x%08x",
+               cycles_current,
+               x_pc, x_inst,
+               x_inst_jal, x_inst_jalr, x_branch_taken,
+               x_target_pc);
+    end
+  end
+
     // ==================================================
   // 4.x Forwarding logic (RAW hazard giải quyết cho Case1)
   // ==================================================
@@ -712,6 +776,10 @@ module DatapathPipelined (
     end
     else if (x_inst_auipc) begin
       x_alu_res_r = x_pc + x_imm;
+    end
+    else if (x_inst_jal || x_inst_jalr) begin
+      // Link register: PC + 4
+      x_alu_res_r = x_pc + 32'd4;
     end
     // ---------- M-extension: MUL ----------
     else if (x_inst_mul) begin
