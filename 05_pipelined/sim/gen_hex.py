@@ -113,10 +113,22 @@ def assemble_line(line):
 
             word = encode_I(imm, 0x0, OPC['JALR'], rd, rs1)
 
-        elif op in ('addi','xori','ori','andi'):
-            rd = regnum(toks[1]); rs1 = regnum(toks[2]); imm = parse_imm(toks[3])
-            f3 = {'addi':0x0, 'xori':0x4, 'ori':0x6, 'andi':0x7}[op]
+        elif op in ('addi','xori','ori','andi','slti','sltiu'):
+            rd  = regnum(toks[1])
+            rs1 = regnum(toks[2])
+            imm = parse_imm(toks[3])
+
+            f3 = {
+                'addi' : 0x0,
+                'slti' : 0x2,
+                'sltiu': 0x3,
+                'xori' : 0x4,
+                'ori'  : 0x6,
+                'andi' : 0x7,
+            }[op]
+
             word = encode_I(imm, f3, OPC['OP-IMM'], rd, rs1)
+
         elif op in ('slli','srli','srai'):
             rd = regnum(toks[1]); rs1 = regnum(toks[2]); sh = parse_imm(toks[3])
             funct3 = 0x1 if op=='slli' else 0x5
@@ -240,6 +252,10 @@ class RISCVSimulator:
                     res = 0
                     if funct3 == 0x0: # ADDI
                         res = val_rs1 + imm_i
+                    elif funct3 == 0x2:    # SLTI
+                        res = 1 if val_rs1 < imm_i else 0
+                    elif funct3 == 0x3: 
+                        res = 1 if self.get_reg(rs1) < (imm_i & 0xffffffff) else 0
                     elif funct3 == 0x4: # XORI
                         res = val_rs1 ^ imm_i
                     elif funct3 == 0x6: # ORI
