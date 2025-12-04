@@ -109,17 +109,34 @@ module DatapathPipelined (
   end
 
   // ------------------------------------------------
-  // 1. Hazard / control wires (skeleton)
+  // 1. Hazard / control wires (load-use stall)
   // ------------------------------------------------
-  wire pc_en    = 1'b1;
-  wire fd_en    = 1'b1;
-  wire dx_en    = 1'b1;
-  wire xm_en    = 1'b1;
-  wire mw_en    = 1'b1;
 
-  wire flush_f  = 1'b0;
-  wire flush_d  = 1'b0;
-  wire flush_x  = 1'b0;
+  // load-use hazard:
+  //  - X stage đang là load (x_is_load)
+  //  - sẽ ghi rd (x_reg_write_en, x_rd != 0)
+  //  - D stage instruction đang dùng rd đó làm rs1 hoặc rs2
+  wire load_use_hazard =
+      x_is_load &&
+      x_reg_write_en &&
+      x_valid &&
+      d_valid &&
+      (x_rd != 5'd0) &&
+      ( (d_rs1 == x_rd) || (d_rs2 == x_rd) );
+
+  // Nếu hazard:
+  //  - dừng PC và pipeline F->D (giữ lại instruction ở D)
+  //  - bơm bubble ở X (flush_x = 1)
+  wire pc_en   = ~load_use_hazard;
+  wire fd_en   = ~load_use_hazard;
+  wire dx_en   = 1'b1;
+  wire xm_en   = 1'b1;
+  wire mw_en   = 1'b1;
+
+  wire flush_f = 1'b0;
+  wire flush_d = 1'b0;
+  wire flush_x = load_use_hazard;
+
 
   // ------------------------------------------------
   // 2. FETCH STAGE (F)
@@ -468,14 +485,15 @@ module DatapathPipelined (
                          (w_rd_reg != 5'd0) && (w_rd_reg == x_rs2_idx);
 
   wire [`REG_SIZE:0] x_rs1_fwd =
-    fwd_rs1_from_w ? w_result_reg :
     fwd_rs1_from_m ? m_alu_res    :
-                     x_rs1_val;
+    fwd_rs1_from_w ? w_result_reg :
+                    x_rs1_val;
 
   wire [`REG_SIZE:0] x_rs2_fwd =
-    fwd_rs2_from_w ? w_result_reg :
     fwd_rs2_from_m ? m_alu_res    :
-                     x_rs2_val;
+    fwd_rs2_from_w ? w_result_reg :
+                    x_rs2_val;
+
 
   reg [`REG_SIZE:0] alu_b;
   reg               alu_b_invert;
@@ -548,6 +566,9 @@ module DatapathPipelined (
     else if (x_inst_auipc) begin     
       x_alu_res_r = x_pc + x_imm;    
     end
+    if (x_is_load || x_is_store) begin
+      x_alu_res_r = alu_sum; 
+    end
 
     // MUL/DIV/REM TODO 
   end
@@ -592,7 +613,7 @@ module DatapathPipelined (
       m_inst         <= x_inst;
       m_valid        <= x_valid;
       m_alu_res      <= x_alu_res;
-      m_rs2_val      <= x_rs2_val;
+      m_rs2_val      <= x_rs2_fwd;
       m_rd           <= x_rd;
       m_is_load      <= x_is_load;
       m_is_store     <= x_is_store;
