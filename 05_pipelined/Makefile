@@ -17,7 +17,7 @@ IVERILOG_FLAGS = -g2012
 # Lấy số case từ chuỗi "case1" -> "1", "case5" -> "5"
 CASE_NUM := $(patsubst case%,%,$(CASE))
 
-CASES = case1 case2 case3 case4 case5 case6 case7 case8 case9 case10 case11 case12
+CASES = case1 case2 case3 case4 case5 case6 case7 case8 case9 case10 case11 case12 case13 case14 case15 case16 case17
 
 .PHONY: all sim_py run_proc run_all_cases \
         run_case1 run_case2 run_case3 run_case4 run_case5 \
@@ -94,6 +94,16 @@ run_case11:
 run_case12:
 	$(MAKE) run_proc CASE=case12
 
+run_case13:
+	$(MAKE) run_proc CASE=case13
+run_case14:
+	$(MAKE) run_proc CASE=case14
+run_case15:
+	$(MAKE) run_proc CASE=case15
+run_case16:
+	$(MAKE) run_proc CASE=case16
+run_case17:
+	$(MAKE) run_proc CASE=case17	
 # ========================
 # 5) Chạy tất cả testcase (case1..case5)
 #    Python gen_hex + Verilog cho từng case
