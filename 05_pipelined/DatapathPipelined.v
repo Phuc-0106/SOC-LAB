@@ -108,34 +108,81 @@ module DatapathPipelined (
     end
   end
 
-  // ------------------------------------------------
-  // 1. Hazard / control wires (load-use stall)
-  // ------------------------------------------------
+    // =========================
+  // 1. Hazard / Stall logic
+  // =========================
 
-  // load-use hazard:
-  //  - X stage đang là load (x_is_load)
-  //  - sẽ ghi rd (x_reg_write_en, x_rd != 0)
-  //  - D stage instruction đang dùng rd đó làm rs1 hoặc rs2
+  // 1) Load-use hazard: D dùng ngay kết quả từ load ở X
   wire load_use_hazard =
       x_is_load &&
       x_reg_write_en &&
       x_valid &&
       d_valid &&
       (x_rd != 5'd0) &&
-      ( (d_rs1 == x_rd) || (d_rs2 == x_rd) );
+      ((d_rs1 == x_rd) || (d_rs2 == x_rd));
 
-  // Nếu hazard:
-  //  - dừng PC và pipeline F->D (giữ lại instruction ở D)
-  //  - bơm bubble ở X (flush_x = 1)
-  wire pc_en   = ~load_use_hazard;
-  wire fd_en   = ~load_use_hazard;
-  wire dx_en   = 1'b1;
-  wire xm_en   = 1'b1;
-  wire mw_en   = 1'b1;
+  // 2) Divider: start / busy / done
+  wire x_divisor_zero = (x_rs2_fwd == 32'd0);
 
+  // Bắt đầu phép chia khi X có DIV/REM, rs2 != 0, divider đang IDLE
+  wire div_start =
+      x_valid &&
+      x_inst_any_div &&
+      !x_divisor_zero &&
+      (div_state == DIV_IDLE) &&
+      !x_div_started;    // chỉ cho start đúng 1 lần / instruction ở X
+
+    always @(posedge clk) begin
+      if (rst) begin
+        x_div_started <= 1'b0;
+
+      end else if (flush_x) begin
+        // X bị flush → instruction cũ bị loại, reset flag
+        x_div_started <= 1'b0;
+
+      end else if (!x_valid) begin
+        // X không chứa instruction hợp lệ → không thể là DIV → reset
+        x_div_started <= 1'b0;
+      end else if (dx_en) begin       // <--- THÊM DÒNG NÀY
+        // Có lệnh mới đi vào Stage X, reset cờ để chuẩn bị cho lệnh mới
+        x_div_started <= 1'b0;
+      end else if (div_start) begin
+        // Bắt đầu thực sự phép chia → đánh dấu đã start
+        x_div_started <= 1'b1;
+      end
+    end
+
+
+  wire div_busy     = (div_state == DIV_BUSY);
+  // DONE đúng 1 cycle khi đang BUSY và đếm đủ số stage
+  wire div_done_now = (div_state == DIV_BUSY) && (div_cnt == `DIVIDER_STAGES);
+
+  // Stall trong suốt thời gian BUSY (đang chia)
+  wire stall_div = (div_busy && !div_done_now) || div_start;
+  // Stall load-use: dừng F,D và bơm bubble vào X
+  wire stall_load = load_use_hazard;
+
+  // F và D dừng khi: load-use hoặc divider đang bận
+  wire global_stall = stall_load || stall_div;
+
+  // Enable cho các pipeline register
+  wire pc_en = ~global_stall;   // F-stage PC
+  wire fd_en = ~global_stall;   // F -> D
+
+  // X,M,W chỉ cần đứng khi divider bận; load-use vẫn cho phép X,M,W chạy
+  // (bubble được bơm vào X từ D thông qua flush_x)
+  wire dx_en = ~stall_div;      // D -> X
+  wire xm_en = ~stall_div;      // X -> M
+  wire mw_en = 1'b1;      // M -> W
+
+  // Flush: chỉ dùng cho load-use, xoá instruction tại X (bubble)
   wire flush_f = 1'b0;
   wire flush_d = 1'b0;
-  wire flush_x = load_use_hazard;
+  wire flush_x = stall_load;
+
+
+
+
 
 
   // ------------------------------------------------
@@ -462,7 +509,12 @@ module DatapathPipelined (
   wire x_inst_slti = x_is_regimm && (x_funct3 == 3'b010);
   wire x_inst_sltiu = x_is_regimm && (x_funct3 == 3'b011);
 
+    // Nhóm DIV/REM bất kỳ
+  wire x_inst_any_div =
+    x_inst_div  || x_inst_divu ||
+    x_inst_rem  || x_inst_remu;
 
+  reg x_div_started;
 
 
   // Branch decision (skeleton – luôn không nhảy)
@@ -495,6 +547,9 @@ module DatapathPipelined (
                     x_rs2_val;
 
 
+  // ==================================================
+  // ALU B-input + CLA
+  // ==================================================
   reg [`REG_SIZE:0] alu_b;
   reg               alu_b_invert;
   reg               alu_cin;
@@ -525,21 +580,113 @@ module DatapathPipelined (
   );
 
 
-  // ---------- ALU result select ----------
-  reg [`REG_SIZE:0] x_alu_res_r;
+    // ===========================
+  // 4.x Divider control / state
+  // ===========================
+  // Phân loại signed / unsigned và loại phép DIV hay REM
+  wire div_is_signed   = x_inst_div  || x_inst_rem;
+  wire div_is_unsigned = x_inst_divu || x_inst_remu;
 
-    always @(*) begin
-    // default
+  wire op_is_div = x_inst_div  || x_inst_divu;
+  wire op_is_rem = x_inst_rem  || x_inst_remu;
+
+  // Lấy dấu và giá trị tuyệt đối của toán hạng A,B (cho signed DIV/REM)
+  wire        sign_a = x_rs1_fwd[31];
+  wire        sign_b = x_rs2_fwd[31];
+  wire [31:0] abs_a  = sign_a ? (~x_rs1_fwd + 32'd1) : x_rs1_fwd;
+  wire [31:0] abs_b  = sign_b ? (~x_rs2_fwd + 32'd1) : x_rs2_fwd;
+
+  // Dividend/divisor đưa vào divider unsigned 8-stage
+  wire [31:0] div_dividend = div_is_signed ? abs_a : x_rs1_fwd;
+  wire [31:0] div_divisor  = div_is_signed ? abs_b : x_rs2_fwd;
+
+  // Trạng thái divider
+  localparam DIV_IDLE = 2'd0;
+  localparam DIV_BUSY = 2'd1;
+
+  reg  [1:0]  div_state;
+  reg  [3:0]  div_cnt;
+  reg  [31:0] div_quotient_r, div_remainder_r;
+  wire [31:0] div_quotient_w, div_remainder_w;
+
+  // Kết nối divider unsigned
+  // stall của core KHÔNG cần dùng để chặn nội bộ divider, nên mình buộc về 0
+  wire div_stall_to_core = 1'b0;
+
+  DividerUnsignedPipelined divu8 (
+    .clk        (clk),
+    .rst        (rst),
+    .stall      (div_stall_to_core),
+    .i_dividend (div_dividend),
+    .i_divisor  (div_divisor),
+    .o_remainder(div_remainder_w),
+    .o_quotient (div_quotient_w)
+  );
+
+
+    // ===========================
+  // 4.x Divider FSM
+  // ===========================
+  always @(posedge clk) begin
+    if (rst) begin
+      div_state       <= DIV_IDLE;
+      div_cnt         <= 4'd0;
+      div_quotient_r  <= 32'd0;
+      div_remainder_r <= 32'd0;
+    end else begin
+      case (div_state)
+        DIV_IDLE: begin
+          div_cnt <= 4'd0;
+          if (div_start) begin
+            div_state <= DIV_BUSY;
+            div_cnt   <= 4'd1; // bắt đầu đếm từ 1
+          end
+        end
+
+        DIV_BUSY: begin
+          if (div_cnt == (`DIVIDER_STAGES)) begin
+            // Đủ 8 stage: chốt kết quả lại
+            div_quotient_r  <= div_quotient_w;
+            div_remainder_r <= div_remainder_w;
+            div_state       <= DIV_IDLE;
+            div_cnt         <= 4'd0;
+          end else begin
+            // Vẫn đang pipeline
+            div_cnt <= div_cnt + 4'd1;
+          end
+        end
+
+        default: begin
+          div_state <= DIV_IDLE;
+          div_cnt   <= 4'd0;
+        end
+      endcase
+    end
+  end
+
+
+    reg [`REG_SIZE:0] x_alu_res_r;
+
+  // Nhân 64-bit cho M-extension
+  wire [63:0] mult_ss = $signed(x_rs1_fwd) * $signed(x_rs2_fwd);
+  wire [63:0] mult_su = $signed(x_rs1_fwd) * $unsigned(x_rs2_fwd);
+  wire [63:0] mult_uu = $unsigned(x_rs1_fwd) * $unsigned(x_rs2_fwd);
+
+  always @(*) begin
     x_alu_res_r = 32'd0;
 
-    // ADD/ADDI/SUB (dùng cla)
+    // ADD / ADDI / SUB (dùng cla)
     if (x_inst_add || x_inst_addi || x_inst_sub) begin
+      x_alu_res_r = alu_sum;
+    end
+    // LOAD/STORE address calc
+    else if (x_is_load || x_is_store) begin
       x_alu_res_r = alu_sum;
     end
     else if (x_inst_and || x_inst_andi) begin
       x_alu_res_r = x_rs1_fwd & alu_b;
     end
-    else if (x_inst_or  || x_inst_ori) begin
+    else if (x_inst_or || x_inst_ori) begin
       x_alu_res_r = x_rs1_fwd | alu_b;
     end
     else if (x_inst_xor || x_inst_xori) begin
@@ -554,27 +701,93 @@ module DatapathPipelined (
     else if (x_inst_sra || x_inst_srai) begin
       x_alu_res_r = $signed(x_rs1_fwd) >>> alu_b[4:0];
     end
-    else if (x_inst_slt  || x_inst_slti) begin
+    else if (x_inst_slt || x_inst_slti) begin
       x_alu_res_r = ($signed(x_rs1_fwd) < $signed(alu_b)) ? 32'd1 : 32'd0;
     end
     else if (x_inst_sltu || x_inst_sltiu) begin
       x_alu_res_r = (x_rs1_fwd < alu_b) ? 32'd1 : 32'd0;
     end
     else if (x_inst_lui) begin
-      x_alu_res_r = x_imm;           
+      x_alu_res_r = x_imm;
     end
-    else if (x_inst_auipc) begin     
-      x_alu_res_r = x_pc + x_imm;    
+    else if (x_inst_auipc) begin
+      x_alu_res_r = x_pc + x_imm;
     end
-    if (x_is_load || x_is_store) begin
-      x_alu_res_r = alu_sum; 
+    // ---------- M-extension: MUL ----------
+    else if (x_inst_mul) begin
+      // MUL: low 32 bits of signed*signed
+      x_alu_res_r = mult_ss[31:0];
     end
+    else if (x_inst_mulh) begin
+      // MULH: high 32 bits of signed*signed
+      x_alu_res_r = mult_ss[63:32];
+    end
+    else if (x_inst_mulsu) begin
+      // MULHSU: high 32 bits của signed*unsigned
+      x_alu_res_r = mult_su[63:32];
+    end
+    else if (x_inst_mulhu) begin
+      // MULHU: high 32 bits của unsigned*unsigned
+      x_alu_res_r = mult_uu[63:32];
+    end
+    // ---------- M-extension: DIV / REM ----------
+    else if (x_inst_any_div) begin
+      // Trường hợp chia cho 0
+      if (x_divisor_zero) begin
+        if (op_is_div) begin
+          // DIV, DIVU: quotient = -1
+          x_alu_res_r = 32'hFFFF_FFFF;
+        end else begin
+          // REM, REMU: remainder = dividend
+          x_alu_res_r = x_rs1_fwd;
+        end
+      end else begin
+        // Chia bình thường
+        reg [31:0] q;
+        reg [31:0] r;
 
-    // MUL/DIV/REM TODO 
+        if (div_done_now) begin
+          // Chu kỳ cuối BUSY: lấy thẳng từ output divider
+          q = div_quotient_w;
+          r = div_remainder_w;
+        end else begin
+          // Các chu kỳ sau: lấy từ bản đã chốt
+          q = div_quotient_r;
+          r = div_remainder_r;
+        end
+
+        if (op_is_div) begin
+          if (div_is_signed) begin
+            // Nếu khác dấu thì quotient âm
+            x_alu_res_r = (sign_a ^ sign_b) ? (~q + 32'd1) : q;
+          end else begin
+            // DIVU
+            x_alu_res_r = q;
+          end
+        end else begin
+          // REM / REMU
+          if (div_is_signed) begin
+            // Remainder cùng dấu với dividend (rs1)
+            x_alu_res_r = sign_a ? (~r + 32'd1) : r;
+          end else begin
+            // REMU
+            x_alu_res_r = r;
+          end
+        end
+      end
+    end
   end
 
-
   wire [`REG_SIZE:0] x_alu_res = x_alu_res_r;
+
+
+  wire stall_w = global_stall;
+  always @(posedge clk) begin
+  if (!rst && x_valid && x_inst_any_div) begin
+    $display("[X ] DIV/REM pc=0x%08x rd=%0d rs1=0x%08x rs2=0x%08x state=%0d cnt=%0d alu_res=0x%08x",
+             x_pc, x_rd, x_rs1_fwd, x_rs2_fwd, div_state, div_cnt, x_alu_res);
+  end
+end
 
   // ------------------------------------------------
   // 5. MEMORY STAGE (M)
@@ -699,8 +912,7 @@ module DatapathPipelined (
       endcase
     end
   end
-
-  // ---------- 5.3 Data đưa sang W stage ----------
+    // ---------- 5.3 Data đưa sang W stage ----------
   wire [`REG_SIZE:0] m_wdata_pre =
     (m_is_load) ? m_load_data_ext : m_alu_res;
 
@@ -738,6 +950,7 @@ module DatapathPipelined (
   assign w_rd        = w_rd_reg;
   assign w_reg_write = w_reg_write_reg;
 
+
   // Trace outputs (so sánh với trace-*.json)
   always @(posedge clk) begin
     if (rst) begin
@@ -753,7 +966,24 @@ module DatapathPipelined (
       end
     end
   end
+    wire [6:0]  w_opcode = w_inst_reg[6:0];
+    wire [2:0]  w_funct3 = w_inst_reg[14:12];
+    wire [6:0]  w_funct7 = w_inst_reg[31:25];
 
+    wire w_is_regreg = (w_opcode == OpcodeRegReg);
+    wire w_inst_div  = w_is_regreg && (w_funct3 == 3'b100) && (w_funct7 == 7'b0000001);
+    wire w_inst_divu = w_is_regreg && (w_funct3 == 3'b101) && (w_funct7 == 7'b0000001);
+    wire w_inst_rem  = w_is_regreg && (w_funct3 == 3'b110) && (w_funct7 == 7'b0000001);
+    wire w_inst_remu = w_is_regreg && (w_funct3 == 3'b111) && (w_funct7 == 7'b0000001);
+
+    wire w_inst_any_div = w_inst_div || w_inst_divu || w_inst_rem || w_inst_remu;
+
+    always @(posedge clk) begin
+      if (!rst && w_valid_reg && w_inst_any_div) begin
+        $display("[WB] DIV/REM rd=x%0d, value=0x%08x", w_rd_reg, w_result_reg);
+      end
+    end
+    
   // ------------------------------------------------
   // 7. HALT: dừng khi lệnh 0x00000073 đến W-stage
   // ------------------------------------------------
