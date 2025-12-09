@@ -240,7 +240,7 @@ module DatapathMultiCycle (
     .cout(cla_cout)
   );
   wire [31:0] alu_add_result;
-  assign alu_add_result = rs1_data + cla_b_input + cin_for_cla;
+  assign alu_add_result = cla_sum;
 
   
   wire [`REG_SIZE:0] div_quotient, div_remainder;
