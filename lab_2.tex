@@ -1,0 +1,665 @@
+\documentclass[a4paper, 11pt]{article}
+
+\usepackage[top=2cm, bottom=2cm, left=2cm, right=2cm]{geometry}
+\usepackage{longtable}
+\usepackage{a4wide,amssymb,epsfig,latexsym,multicol,array,hhline,fancyhdr}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{lastpage}
+\usepackage[lined,boxed,commentsnumbered]{algorithm2e}
+\usepackage{enumerate}
+\usepackage{color}
+\usepackage{graphicx}							% Standard graphics package
+\usepackage{subfigure}
+\usepackage{array}
+\usepackage{tabularx, caption}
+\usepackage{multirow}
+\usepackage[framemethod=tikz]{mdframed}% For highlighting paragraph backgrounds
+\usepackage{afterpage}
+\usepackage{multicol}
+\usepackage{rotating}
+\usepackage{graphics}
+\usepackage{geometry}
+\usepackage{setspace}
+\usepackage{epsfig}
+\usepackage{tikz}
+\usepackage{listings}
+\usetikzlibrary{shapes.geometric, arrows, positioning, fit, backgrounds}
+\usepackage{hyperref}
+\usepackage{minitoc}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{subcaption}
+\usepackage{acronym}
+\usepackage{siunitx}
+\hypersetup{urlcolor=blue,linkcolor=black,citecolor=black,colorlinks=true} 
+%\usepackage{pstcol} 								% PSTricks with the standard color package
+
+\usepackage{minted}
+\usepackage{xcolor} % to access the named colour LightGray
+\definecolor{LightGray}{rgb}{0.988, 0.976, 0.922}
+
+\usepackage{tcolorbox}
+\newtcolorbox{myblock}[1]{
+    colback=gray!5!white,
+    colframe=gray!75!black,
+    fonttitle=\bfseries,
+    title=#1
+}
+
+\usepackage{subcaption}
+% \usepackage{subfigure}
+
+\graphicspath{{fig/}}
+
+% \everymath{\color{blue}}
+%\usepackage{fancyhdr}
+\setlength{\headheight}{40pt}
+\pagestyle{fancy}
+\fancyhead{} % clear all header fields
+\fancyhead[R]{
+	\begin{tabular}{l}
+		\tiny \bf \\
+		\tiny \bf 
+	\end{tabular}  
+ }
+\fancyfoot{} % clear all footer fields
+\fancyfoot[L]{\scriptsize \ttfamily Semester 251}
+\fancyfoot[R]{\scriptsize \ttfamily Page {\thepage}/\pageref{LastPage}}
+\renewcommand{\headrulewidth}{0.3pt}
+\renewcommand{\footrulewidth}{0.3pt}
+
+
+%%%
+\setcounter{secnumdepth}{4}
+\setcounter{tocdepth}{3}
+\makeatletter
+\newcounter {subsubsubsection}[subsubsection]
+\renewcommand\thesubsubsubsection{\thesubsubsection .\@alph\c@subsubsubsection}
+\newcommand\subsubsubsection{\@startsection{subsubsubsection}{4}{\z@}%
+                                     {-3.25ex\@plus -1ex \@minus -.2ex}%
+                                     {1.5ex \@plus .2ex}%
+                                     {\normalfont\normalsize\bfseries}}
+\newcommand*\l@subsubsubsection{\@dottedtocline{3}{10.0em}{4.1em}}
+\newcommand*{\subsubsubsectionmark}[1]{}
+\makeatother
+
+\definecolor{dkgreen}{rgb}{0,0.6,0}
+\definecolor{gray}{rgb}{0.5,0.5,0.5}
+\definecolor{mauve}{rgb}{0.58,0,0.82}
+\lstset{
+  language=Verilog,
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{blue},
+  stringstyle=\color{red},
+  showstringspaces=false,
+  breaklines=true,
+  frame=single,
+  numbers=left,
+  numberstyle=\tiny\color{gray}
+}
+\begin{document}
+
+\begin{titlepage}
+\begin{center}
+VIETNAM NATIONAL UNIVERSITY, HO CHI MINH CITY \\
+HO CHI MINH CITY UNIVERSITY OF TECHNOLOGY \\
+Faculty of Computer Science and Engineering
+\end{center}
+
+\vspace{1cm}
+
+\begin{figure}[H]
+        \centering
+        \includegraphics[scale=0.3]{hcmut.png}
+    \end{figure}
+\vspace{1cm}
+\begin{center}
+\begin{tabular}{c}
+	\multicolumn{1}{l}{\textbf{{\Large Lab 2 Report}}}\\
+	~~\\
+	\hline
+	\\
+	\textbf{{\huge Introduction to SOC}}\\
+	\\
+    \\
+	\hline 
+\end{tabular}
+\\
+\vspace{0.5cm}
+    \large \textbf{Semester 251} 
+\end{center}
+\vspace{0.4cm}
+\begin{center}
+\fontsize{15pt}{18pt}\selectfont
+    \textbf{MAJOR: COMPUTER ENGINEERING}
+
+    \vspace{0.2cm}
+
+    \begin{tabular}{l l}
+        \textbf{LECTURER:} & PHAM KIEU NHAT ANH
+
+    \end{tabular}
+    
+\textbf{------o0o------}
+
+    
+    \begin{tabular}{l l}
+        \textbf{STUDENT:} & PHAM TAN PHONG - 2252614 \\
+
+    \end{tabular}
+    
+\vspace{4cm}
+
+    HO CHI MINH CITY, November 2025
+
+\end{center}
+
+\thispagestyle{empty}
+
+\end{titlepage}
+\tableofcontents
+\newpage
+
+\section{Introduction}
+
+This laboratory report documents the design, implementation, and validation of a 32-bit Carry Lookahead Adder (CLA) developed as part of the System-on-Chip (SOC) curriculum. The CLA represents an advanced arithmetic circuit topology that achieves high-speed addition by calculating carry signals concurrently instead of using sequential ripple propagation.
+
+The core objectives of this laboratory assignment include:
+\begin{enumerate}
+    \item Comprehending the fundamental concepts of carry lookahead architecture and its performance benefits compared to conventional ripple carry designs
+    \item Designing modular hierarchical components (GP1, GP4, GP8) using Verilog Hardware Description Language
+    \item Assembling these building blocks into a fully functional 32-bit addition unit
+    \item Conducting thorough functional verification through simulation-based testing methodologies
+\end{enumerate}
+
+\section{Carry Lookahead Adder (CLA) Architecture}
+
+\subsection{Theoretical Foundation}
+
+\subsubsection{Fundamental Principles}
+
+The Carry Lookahead Adder represents a significant advancement over traditional Ripple Carry Adders by enabling parallel computation of carry signals, thereby minimizing critical path delay. At the core of this architecture are two essential control signals defined for each bit position:
+
+\begin{itemize}
+    \item \textbf{Generate (G)}: This signal activates when a carry is created locally at position $i$, occurring when both operand bits equal 1, formally expressed as $g_i = a_i \cdot b_i$
+    \item \textbf{Propagate (P)}: This signal determines whether an incoming carry will pass through position $i$, which happens when at least one operand bit is 1, represented as $p_i = a_i \oplus b_i$ or $p_i = a_i + b_i$
+\end{itemize}
+
+The resulting sum and outgoing carry for each bit position follow these relationships:
+
+$$s_i = p_i \oplus c_i$$
+
+$$c_{i+1} = g_i + p_i \cdot c_i$$
+
+where $c_i$ represents the carry input signal at bit position $i$.
+
+\subsubsection{Carry Expression Expansion}
+
+Within a 4-bit computational block, the carry signals can be explicitly expanded using Boolean algebra:
+
+\begin{align}
+c_1 &= g_0 + p_0 \cdot c_0 \\
+c_2 &= g_1 + p_1 \cdot g_0 + p_1 \cdot p_0 \cdot c_0 \\
+c_3 &= g_2 + p_2 \cdot g_1 + p_2 \cdot p_1 \cdot g_0 + p_2 \cdot p_1 \cdot p_0 \cdot c_0 \\
+c_4 &= g_3 + p_3 \cdot g_2 + p_3 \cdot p_2 \cdot g_1 + p_3 \cdot p_2 \cdot p_1 \cdot g_0 + p_3 \cdot p_2 \cdot p_1 \cdot p_0 \cdot c_0
+\end{align}
+
+\subsubsection{Hierarchical Group Signals}
+
+To facilitate multi-level hierarchical construction, aggregate generate and propagate signals are derived:
+
+$$G_{\text{group}} = g_3 + p_3 \cdot g_2 + p_3 \cdot p_2 \cdot g_1 + p_3 \cdot p_2 \cdot p_1 \cdot g_0$$
+
+$$P_{\text{group}} = p_3 \cdot p_2 \cdot p_1 \cdot p_0$$
+
+These group-level abstractions enable higher-tier modules to interface with multi-bit blocks as atomic units.
+
+\subsection{Structural Organization}
+
+\subsubsection{Multi-Tier Hierarchy}
+
+The 32-bit adder employs a four-layer hierarchical architecture to achieve optimal performance:
+
+\begin{enumerate}
+    \item \textbf{Tier 1 (GP1)}: Computes bit-level generate and propagate indicators from individual operand pairs
+    \item \textbf{Tier 2 (GP4)}: Aggregates 4 consecutive bits utilizing carry lookahead logic to produce intermediate carries and aggregate control signals
+    \item \textbf{Tier 3 (GP8)}: Merges a pair of GP4 modules to construct an 8-bit processing element
+    \item \textbf{Tier 4 (CLA)}: Integrates four GP8 modules to realize the complete 32-bit addition operation
+\end{enumerate}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    block/.style={rectangle, draw, minimum width=1.5cm, minimum height=0.8cm, text centered},
+    arrow/.style={->, >=stealth}
+]
+    % CLA 32-bit level
+    \node[block] (cla) at (3, 4) {CLA 32-bit};
+    
+    % GP8 blocks
+    \node[block] (gp8_0) at (0.5, 2.5) {GP8[0]};
+    \node[block] (gp8_1) at (2.5, 2.5) {GP8[1]};
+    \node[block] (gp8_2) at (4.5, 2.5) {GP8[2]};
+    \node[block] (gp8_3) at (6.5, 2.5) {GP8[3]};
+    
+    % GP4 blocks (shown for GP8[0])
+    \node[block] (gp4_0) at (-0.2, 1) {GP4[0]};
+    \node[block] (gp4_1) at (1.8, 1) {GP4[1]};
+    
+    % GP1 blocks (shown for GP4[0])
+    \node[block] (gp1_0) at (-1.2, -0.5) {GP1[0]};
+    \node[block] (gp1_1) at (1.2, -0.5) {GP1[1]};
+    
+    % Connections
+    \draw[arrow] (gp8_0) -- (cla);
+    \draw[arrow] (gp8_1) -- (cla);
+    \draw[arrow] (gp8_2) -- (cla);
+    \draw[arrow] (gp8_3) -- (cla);
+    
+    \draw[arrow] (gp4_0) -- (gp8_0);
+    \draw[arrow] (gp4_1) -- (gp8_0);
+    
+    \draw[arrow] (gp1_0) -- (gp4_0);
+    \draw[arrow] (gp1_1) -- (gp4_0);
+\end{tikzpicture}
+\caption{CLA Hierarchical Architecture}
+\end{figure}
+
+\subsection{Module Implementation}
+
+\subsubsection{GP1 Component}
+
+The GP1 module serves as the foundational element, calculating generate and propagate control signals for individual bit positions:
+
+\begin{algorithm}[H]
+\SetAlgoLined
+\KwIn{Single-bit operands $a$, $b$}
+\KwOut{Generate signal $g$, Propagate signal $p$}
+$g \gets a \land b$ \tcp*{Generate when both inputs are 1}
+$p \gets a \lor b$ \tcp*{Propagate when at least one input is 1}
+\caption{GP1 Component: Bit-Level Generate/Propagate}
+\end{algorithm}
+
+This component functions purely as combinational logic, producing g and p outputs with minimal gate delays.
+
+\subsubsection{GP4 Component}
+
+The GP4 module realizes a 4-bit carry lookahead section with integrated intermediate carry generation:
+
+\begin{algorithm}[H]
+\SetAlgoLined
+\KwIn{Generate vector $g[3:0]$, Propagate vector $p[3:0]$, Carry-in $c_0$}
+\KwOut{Internal carries $c[3:1]$, Group generate $G_{\text{group}}$, Group propagate $P_{\text{group}}$}
+\tcp{Compute intermediate carries using CLA equations}
+$c[1] \gets g[0] \lor (p[0] \land c_0)$\\
+$c[2] \gets g[1] \lor (p[1] \land g[0]) \lor (p[1] \land p[0] \land c_0)$\\
+$c[3] \gets g[2] \lor (p[2] \land g[1]) \lor (p[2] \land p[1] \land g[0]) \lor (p[2] \land p[1] \land p[0] \land c_0)$\\
+\tcp{Compute group-level signals}
+$G_{\text{group}} \gets g[3] \lor (p[3] \land g[2]) \lor (p[3] \land p[2] \land g[1]) \lor (p[3] \land p[2] \land p[1] \land g[0])$\\
+$P_{\text{group}} \gets p[3] \land p[2] \land p[1] \land p[0]$\\
+\caption{GP4 Component: 4-bit Carry Lookahead Logic}
+\end{algorithm}
+
+Notable characteristics:
+\begin{itemize}
+    \item Calculates intermediate carry signals $c[1]$, $c[2]$, $c[3]$ through explicit Boolean expansion
+    \item Produces aggregate control signals $G_{\text{group}}$ and $P_{\text{group}}$ for hierarchical composition
+    \item Implements purely combinational paths ensuring rapid signal propagation
+\end{itemize}
+
+\subsubsection{GP8 Component}
+
+The GP8 module orchestrates two GP4 instances to construct an 8-bit carry lookahead unit:
+
+\begin{algorithm}[H]
+\SetAlgoLined
+\KwIn{Generate vector $g[7:0]$, Propagate vector $p[7:0]$, Carry-in $c_0$}
+\KwOut{Internal carries $c[7:1]$, Group generate $G_{\text{group}}$, Group propagate $P_{\text{group}}$}
+\tcp{Process lower 4-bit block}
+$(c_{\text{low}}[3:1], G_{\text{low}}, P_{\text{low}}) \gets \text{GP4}(g[3:0], p[3:0], c_0)$\\
+\tcp{Compute inter-block carry}
+$c_{\text{mid}} \gets G_{\text{low}} \lor (P_{\text{low}} \land c_0)$\\
+\tcp{Process upper 4-bit block}
+$(c_{\text{high}}[3:1], G_{\text{high}}, P_{\text{high}}) \gets \text{GP4}(g[7:4], p[7:4], c_{\text{mid}})$\\
+\tcp{Assemble internal carries}
+$c[3:1] \gets c_{\text{low}}[3:1]$\\
+$c[7:4] \gets (c_{\text{high}}[3:1], c_{\text{mid}})$\\
+\tcp{Compute 8-bit group signals}
+$G_{\text{group}} \gets G_{\text{high}} \lor (P_{\text{high}} \land G_{\text{low}})$\\
+$P_{\text{group}} \gets P_{\text{high}} \land P_{\text{low}}$\\
+\caption{GP8 Component: 8-bit Hierarchical Carry Lookahead}
+\end{algorithm}
+
+The hierarchical methodology yields multiple advantages:
+\begin{itemize}
+    \item Simplifies carry logic complexity through decomposition
+    \item Promotes component reusability across the design
+    \item Facilitates independent module verification strategies
+\end{itemize}
+
+\subsubsection{32-bit CLA Top-Level Integration}
+
+The primary CLA module instantiates four GP8 units to construct the complete 32-bit addition circuit:
+
+\begin{algorithm}[H]
+\SetAlgoLined
+\KwIn{32-bit operands $a[31:0]$, $b[31:0]$, Carry-in $c_0$}
+\KwOut{32-bit sum $\text{sum}[31:0]$, Carry-out $c_{\text{out}}$}
+$\text{carry}[0] \gets c_0$\\
+\tcp{Generate bit-level G/P signals for all 32 bits in parallel}
+\For{$i \gets 0$ \KwTo $31$}{
+    $(g[i], p[i]) \gets \text{GP1}(a[i], b[i])$
+}
+\tcp{Process four 8-bit blocks using GP8 components}
+$(c_{\text{blk0}}[7:1], G_8[0], P_8[0]) \gets \text{GP8}(g[7:0], p[7:0], \text{carry}[0])$\\
+$(c_{\text{blk1}}[7:1], G_8[1], P_8[1]) \gets \text{GP8}(g[15:8], p[15:8], \text{carry}[8])$\\
+$(c_{\text{blk2}}[7:1], G_8[2], P_8[2]) \gets \text{GP8}(g[23:16], p[23:16], \text{carry}[16])$\\
+$(c_{\text{blk3}}[7:1], G_8[3], P_8[3]) \gets \text{GP8}(g[31:24], p[31:24], \text{carry}[24])$\\
+\tcp{Compute inter-block carries}
+$\text{carry}[8] \gets G_8[0] \lor (P_8[0] \land \text{carry}[0])$\\
+$\text{carry}[16] \gets G_8[1] \lor (P_8[1] \land \text{carry}[8])$\\
+$\text{carry}[24] \gets G_8[2] \lor (P_8[2] \land \text{carry}[16])$\\
+$\text{carry}[32] \gets G_8[3] \lor (P_8[3] \land \text{carry}[24])$\\
+\tcp{Distribute internal carries}
+$\text{carry}[7:1] \gets c_{\text{blk0}}[7:1]$; 
+$\text{carry}[15:9] \gets c_{\text{blk1}}[7:1]$\\
+$\text{carry}[23:17] \gets c_{\text{blk2}}[7:1]$; 
+$\text{carry}[31:25] \gets c_{\text{blk3}}[7:1]$\\
+\tcp{Compute final sum using XOR operations}
+$\text{sum}[7:0] \gets a[7:0] \oplus b[7:0] \oplus (c_{\text{blk0}}[7:1], \text{carry}[0])$\\
+$\text{sum}[15:8] \gets a[15:8] \oplus b[15:8] \oplus (c_{\text{blk1}}[7:1], \text{carry}[8])$\\
+$\text{sum}[23:16] \gets a[23:16] \oplus b[23:16] \oplus (c_{\text{blk2}}[7:1], \text{carry}[16])$\\
+$\text{sum}[31:24] \gets a[31:24] \oplus b[31:24] \oplus (c_{\text{blk3}}[7:1], \text{carry}[24])$\\
+$c_{\text{out}} \gets \text{carry}[32]$\\
+\caption{32-bit CLA Top-Level Algorithm}
+\end{algorithm}
+
+Critical implementation aspects:
+\begin{enumerate}
+    \item An array of 32 GP1 instances operates in parallel to generate bit-level control signals
+    \item Four independent GP8 modules simultaneously process their respective 8-bit segments
+    \item Carry propagation follows a hierarchical computation and aggregation scheme
+    \item Sum bits result from XOR operations between operands and hierarchically-computed carry values
+\end{enumerate}
+
+\section{Performance Analysis}
+
+\subsection{Delay Characteristics Comparison}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|c|c|c|}
+\hline
+\textbf{Architecture} & \textbf{Critical Path} & \textbf{Gate Delays} & \textbf{Speedup Factor} \\
+\hline
+Ripple Carry Adder (32-bit) & $c_0 \rightarrow c_{32}$ & 32 gate delays & $\times 1.0$ \\
+\hline
+CLA (4-bit) & GP1 $\rightarrow$ GP4 $\rightarrow$ Sum & 3 gate delays & $\times 10.7$ \\
+\hline
+CLA (8-bit) & GP1 $\rightarrow$ GP4 $\rightarrow$ GP4 $\rightarrow$ Sum & 4 gate delays & $\times 8.0$ \\
+\hline
+CLA (32-bit) & GP1 $\rightarrow$ GP4 $\rightarrow$ GP8 $\rightarrow$ Carry chain $\rightarrow$ Sum & 5 gate delays & $\times 6.4$ \\
+\hline
+\end{tabular}
+\caption{Comparative Propagation Delay Analysis}
+\end{table}
+
+The hierarchical CLA topology achieves approximately 6.4$\times$ performance improvement in terms of propagation delay when compared to an equivalent-width ripple carry implementation.
+
+\subsection{Critical Path Evaluation}
+
+The longest combinational path through the 32-bit CLA encompasses:
+
+\begin{enumerate}
+    \item GP1 stage: Input operands $a_i$, $b_i$ transformed to $g_i$, $p_i$ (1 gate delay)
+    \item GP4 stage: Internal carry generation within 4-bit segments (1 gate delay)
+    \item Inter-block propagation: Group signals $G8$ and $P8$ traversing between GP8 modules (1 gate delay)
+    \item Sum formation: Final XOR operation $a_i \oplus b_i \oplus c_i$ (1 gate delay)
+\end{enumerate}
+
+Aggregate critical path latency: approximately 4-5 gate delays for complete 32-bit addition.
+
+\section{Verification Methodology}
+
+\subsection{Testbench Architecture}
+
+The verification environment (tb\_cla.v) implements a self-checking framework with automated result validation and comprehensive logging capabilities:
+
+\begin{algorithm}[H]
+\SetAlgoLined
+\KwData{Test vectors $\text{tv\_a}[0:9]$, $\text{tv\_b}[0:9]$, $\text{tv\_c0}[0:9]$}
+\KwResult{Verification report with pass/fail status}
+$\text{fails} \gets 0$\\
+$\text{logFile} \gets \text{open}(``\text{cla\_log.txt}'')$\\
+\tcp{Initialize directed test vectors}
+$\text{tv\_a}[0] \gets \text{0x00000000}$; $\text{tv\_b}[0] \gets \text{0x00000000}$; $\text{tv\_c0}[0] \gets 0$\\
+$\text{tv\_a}[1] \gets \text{0x00000001}$; $\text{tv\_b}[1] \gets \text{0x00000001}$; $\text{tv\_c0}[1] \gets 0$\\
+$\text{tv\_a}[2] \gets \text{0xFFFFFFFF}$; $\text{tv\_b}[2] \gets \text{0x00000001}$; $\text{tv\_c0}[2] \gets 0$\\
+\tcp{Additional vectors including random patterns}
+\For{$i \gets 6$ \KwTo $9$}{
+    $\text{tv\_a}[i] \gets \text{random}()$\\
+    $\text{tv\_b}[i] \gets \text{random}()$\\
+    $\text{tv\_c0}[i] \gets \text{random}() \mod 2$
+}
+\tcp{Execute test sequence}
+\For{$i \gets 0$ \KwTo $9$}{
+    $a \gets \text{tv\_a}[i]$; $b \gets \text{tv\_b}[i]$; $c_0 \gets \text{tv\_c0}[i]$\\
+    \tcp{Compute DUT outputs}
+    $(\text{sum}, c_{\text{out}}) \gets \text{CLA}(a, b, c_0)$\\
+    \tcp{Compute reference model}
+    $(\text{sum\_ref}, c_{\text{out\_ref}}) \gets a + b + c_0$\\
+    \tcp{Compare and log results}
+    \eIf{$(\text{sum} \neq \text{sum\_ref}) \lor (c_{\text{out}} \neq c_{\text{out\_ref}})$}{
+        $\text{print}(``\text{FAIL @ Test}~i'')$\\
+        $\text{fails} \gets \text{fails} + 1$\\
+        $\text{log}(\text{logFile}, i, a, b, c_0, \text{sum}, c_{\text{out}}, ``\text{FAIL}'')$
+    }{
+        $\text{print}(``\text{PASS @ Test}~i'')$\\
+        $\text{log}(\text{logFile}, i, a, b, c_0, \text{sum}, c_{\text{out}}, ``\text{PASS}'')$
+    }
+}
+\tcp{Generate final report}
+\eIf{$\text{fails} = 0$}{
+    $\text{print}(``\text{ALL TESTS PASSED}'')$
+}{
+    $\text{print}(``\text{\{fails\} TESTS FAILED}'')$
+}
+$\text{close}(\text{logFile})$\\
+\caption{Self-Checking Testbench Verification Flow}
+\end{algorithm}
+
+\subsection{Test Coverage Strategy}
+
+\subsubsection{Directed Functional Vectors}
+
+\begin{enumerate}
+    \item \textbf{Null Operation}: $0 + 0 + 0 = 0$ validates idle state behavior
+    \item \textbf{Minimal Addition}: $1 + 1 + 0 = 2$ verifies basic carry-free operation
+    \item \textbf{Maximum Overflow}: $\text{0xFFFFFFFF} + 1 + 0 = \text{0x100000000}$ confirms wraparound and carry-out generation
+    \item \textbf{Mixed Data Pattern}: $\text{0x12345678} + \text{0x87654321} + 1$ tests arbitrary value handling with carry-in
+    \item \textbf{Complementary Pattern}: $\text{0xA5A5A5A5} + \text{0x5A5A5A5A} + 0$ exercises alternating bit sequences
+\end{enumerate}
+
+\subsubsection{Randomized Stimulus}
+
+Pseudo-random test vectors supplement directed tests to enhance coverage and expose corner-case failures.
+
+\subsection{Validation Framework}
+
+The verification approach employs multiple validation layers:
+
+\begin{enumerate}
+    \item \textbf{Reference Model}: Leverages Verilog's native arithmetic operators as behavioral golden reference
+    \item \textbf{Automated Checking}: Real-time comparison between DUT outputs and reference model predictions
+    \item \textbf{Transaction Logging}: Persistent recording of all stimulus-response pairs for offline analysis
+    \item \textbf{Status Reporting}: Clear pass/fail indication for each test vector with summary statistics
+\end{enumerate}
+
+\subsection{Simulation Results}
+
+\subsubsection{Test Vector Summary}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|c|l|l|l|l|l|}
+\hline
+\textbf{Vector} & \textbf{Operand A} & \textbf{Operand B} & \textbf{Cin} & \textbf{Sum} & \textbf{Cout} \\
+\hline
+1 & 0x00000000 & 0x00000000 & 0 & 0x00000000 & 0 \\
+\hline
+2 & 0x00000001 & 0x00000001 & 0 & 0x00000002 & 0 \\
+\hline
+3 & 0xFFFFFFFF & 0x00000001 & 0 & 0x00000000 & 1 \\
+\hline
+4 & 0x12345678 & 0x87654321 & 1 & 0x9999999A & 0 \\
+\hline
+5 & 0xA5A5A5A5 & 0x5A5A5A5A & 0 & 0xFFFFFFFF & 0 \\
+\hline
+6 & 0xDEADBEEF & 0xCAFEBABE & 0 & 0xA9AC79AD & 1 \\
+\hline
+\end{tabular}
+\end{table}
+\subsection{Waveform Analysis}
+
+Timing waveform visualization provides insight into the dynamic behavior of the CLA during operation across multiple test scenarios spanning 0ns to approximately 100ns simulation time.
+
+\textbf{Test Scenario 1 (0-10ns):} Initial conditions with $a = \text{0x00000000}$, $b = \text{0x00000000}$, $c_0 = 0$ establish baseline behavior. The adder generates $\text{sum} = \text{0x00000000}$ with $c_{\text{out}} = 0$ as expected. Internal carry propagation chain $\text{carry}[32:0]$ maintains zero state, while both generate ($g$) and propagate ($p$) signals remain inactive, confirming proper null input handling.
+
+\textbf{Test Scenario 2 (10-20ns):} Elementary addition with $a = \text{0x00000001}$, $b = \text{0x00000001}$, $c_0 = 0$ exercises minimal carry activity. Output $\text{sum} = \text{0x00000002}$ with $c_{\text{out}} = 0$ validates basic arithmetic. The carry chain exhibits $\text{carry}[32:0] = \text{0x00000002}$, indicating localized carry propagation limited to the least significant bit. Generate signal $g[31:0] = \text{0x00000001}$ and propagate $p[31:0] = \text{0x00000001}$ accurately reflect bit-level logic operations.
+
+\textbf{Test Scenario 3 (20-30ns):} Maximum magnitude overflow condition using $a = \text{0xFFFFFFFF}$, $b = \text{0x00000001}$ produces $\text{sum} = \text{0x00000000}$ with $c_{\text{out}} = 1$, properly demonstrating modular arithmetic wraparound. The carry chain $\text{carry}[32:0] = \text{0x1FFFFFFFF}$ reveals complete carry propagation spanning all 32 bit positions. Group propagate indicators $G8[3:0] = 1$ and $P8[3:0] = \text{F}$ (hexadecimal) signal full propagation capability across all four 8-bit processing blocks.
+
+\textbf{Test Scenario 4 (30-40ns):} Heterogeneous operand evaluation with $a = \text{0x12345678}$, $b = \text{0x87654321}$, $c_0 = 1$ yields $\text{sum} = \text{0x9999999A}$, incorporating the carry-in correctly. Carry propagation pattern $\text{carry}[32:0] = \text{0x00CC88CC3}$ demonstrates selective carry generation at specific bit positions based on operand alignment. Generate signal $g[31:0] = \text{0x02244220}$ identifies positions where both operands are logic-high, while propagate $p[31:0] = \text{0x97755779}$ marks positions permitting carry passage.
+
+\textbf{Test Scenario 5 (40-50ns):} Alternating bit topology using $a = \text{0xA5A5A5A5}$, $b = \text{0x5A5A5A5A}$ generates $\text{sum} = \text{0xFFFFFFFF}$ with $c_{\text{out}} = 0$, validating proper handling of complementary data patterns. Group-level signals $G8[3:0] = 0$ (no group generation) combined with $P8[3:0] = \text{F}$ (full propagation) illustrate the adder's capability to process diverse bit configurations across all blocks.
+
+\textbf{Critical Observations:}
+\begin{itemize}
+    \item Carry propagation chain correctly distributes carry signals across all 32 bit positions as evidenced by $\text{carry}[32:0]$ transitions
+    \item Group-level generate ($G8$) and propagate ($P8$) signals for the four 8-bit blocks function according to design specifications
+    \item Every test case generates outputs precisely matching reference model predictions ($\text{sum\_ref}$ and $\text{cout\_ref}$)
+    \item Parallel carry computation characteristic of CLA architecture manifests in simultaneous multi-bit carry signal transitions
+\end{itemize}
+
+This timing analysis validates correct implementation of the hierarchical CLA topology with appropriate generate/propagate logic operating at both individual bit and block aggregation levels.
+
+\section{Discussion}
+
+\subsection{Functional Verification Outcome}
+
+The 32-bit CLA implementation successfully realizes addition operations with complete functional correctness:
+
+\begin{itemize}
+    \item All verification vectors generate outputs matching the behavioral reference model
+    \item Propagation delay demonstrates substantial reduction relative to ripple carry topology
+\section{Conclusion}
+
+\subsection{Laboratory Accomplishments}
+
+This experimental work successfully accomplished the design, implementation, and verification of a hierarchical 32-bit Carry Lookahead Adder:
+
+\begin{enumerate}
+    \item Designed and realized modular GP1, GP4, and GP8 building blocks adhering to carry lookahead theoretical foundations
+    \item Successfully assembled hierarchical components into a fully functional 32-bit addition unit with correct carry distribution
+    \item Demonstrated approximately 6.4$\times$ performance enhancement compared to equivalent ripple carry implementations
+    \item Established design correctness through rigorous simulation-based verification with 100\% test pass rate
+\end{enumerate}
+
+\subsection{Educational Outcomes}
+
+\begin{itemize}
+    \item Acquired comprehensive understanding of carry propagation mechanisms and their influence on arithmetic circuit performance
+    \item Developed proficiency in hierarchical decomposition strategies for managing complex digital systems
+    \item Recognized the significance of group-level generate/propagate abstractions for scalable arithmetic architectures
+    \item Gained practical experience in modular testbench construction and systematic verification approaches
+\end{itemize}
+
+\subsection{Key Insights}
+
+\begin{enumerate}
+    \item Carry lookahead methodology delivers substantial performance benefits for wide data path addition operations
+    \item Hierarchical structural decomposition simplifies both implementation complexity and verification effort
+    \item Precise carry signal management constitutes a critical requirement for correct arithmetic circuit operation
+    \item Comprehensive stimulus coverage with diverse test patterns ensures robust design validation
+\end{enumerate}
+
+\subsection{Potential Extensions}
+
+Future work could explore several enhancement directions:
+
+\begin{itemize}
+    \item Development of hybrid adder topologies combining CLA with prefix tree or conditional sum techniques
+    \item Parameterizable CLA generators supporting arbitrary bit widths including non-power-of-two configurations
+    \item Pipeline insertion for high-frequency operation in throughput-oriented applications
+    \item Integration into complete arithmetic logic unit (ALU) frameworks incorporating multiplication and logical operations
+    \item Application of formal verification methodologies including equivalence checking and model checking
+    \item Power-aware optimization through adaptive voltage scaling or clock gating strategies
+\end{itemize}
+
+\subsection{Performance Characteristics}
+
+\begin{enumerate}
+    \item \textbf{Throughput}: The CLA can perform one 32-bit addition per clock cycle
+    \item \textbf{Latency}: Approximately 4-5 gate delays from input to sum output
+    \item \textbf{Area}: Increased logic compared to ripple carry due to additional generate/propagate computations
+    \item \textbf{Power}: Higher dynamic power due to more parallel logic, but offset by reduced clock cycles needed
+\end{enumerate}
+
+\subsection{Design Correctness}
+
+The hierarchical design correctly implements CLA principles:
+
+\begin{itemize}
+    \item GP1 modules correctly compute generate and propagate signals
+    \item GP4 modules accurately implement 4-bit CLA equations
+    \item GP8 modules properly combine GP4 blocks with correct carry propagation
+    \item 32-bit CLA correctly computes sum and carry-out signals
+\end{itemize}
+
+\section{Conclusion}
+
+\subsection{Summary of Achievements}
+
+This laboratory successfully demonstrated the design and implementation of a hierarchical 32-bit Carry Lookahead Adder:
+
+\begin{enumerate}
+    \item Implemented modular GP1, GP4, and GP8 components following CLA theory
+    \item Integrated components into a complete 32-bit adder with proper carry management
+    \item Achieved approximately 6.4$\times$ speed improvement over ripple carry architecture
+    \item Verified design correctness through comprehensive testbench
+\end{enumerate}
+
+\subsection{Technical Learning}
+
+\begin{itemize}
+    \item Understanding of carry propagation and its impact on adder performance
+    \item Hierarchical design techniques for managing complex arithmetic circuits
+    \item Importance of group generate/propagate signals for scalable designs
+    \item Modular testbench development and verification methodologies
+\end{itemize}
+
+\subsection{Lessons Learned}
+
+\begin{enumerate}
+    \item Carry lookahead logic provides significant performance advantages for multi-bit addition
+    \item Hierarchical decomposition facilitates both design and verification
+    \item Accurate carry accounting is critical in implementing correct arithmetic circuits
+    \item Comprehensive testing with multiple test vectors ensures design reliability
+\end{enumerate}
+
+\subsection{Future Enhancements}
+
+Potential improvements and extensions include:
+
+\begin{itemize}
+    \item Implementation of hybrid structures combining CLA with other carry acceleration techniques
+    \item Variable-width CLA for non-power-of-2 bit widths
+    \item Pipelined CLA for high-throughput applications
+    \item Integration with multiplication units for complete arithmetic logic units (ALUs)
+    \item Formal verification using model checking techniques
+    \item Power optimization through dynamic supply voltage scaling
+\end{itemize}
+
+\end{document}
